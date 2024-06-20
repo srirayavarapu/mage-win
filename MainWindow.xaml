@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<Window
+<Window 
     x:Class="MageWin.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -7,31 +7,94 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="using:MageWin"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
-
-    <Grid Loaded="Grid_Loaded">
+    xmlns:winuiex="using:WinUIEx"
+    x:Name="MainWindowUI"
+    mc:Ignorable="d"
+    xmlns:tb="using:H.NotifyIcon"
+    >
+    <Grid
+        Background="Transparent"
+        Loaded="Grid_Loaded"
+       >
         <Grid.RowDefinitions>
             <RowDefinition Height="0.1*" />
             <RowDefinition />
+            <RowDefinition Height="0.1*" />
         </Grid.RowDefinitions>
-        <controls:Menu>
-            <controls:MenuItem Name="FileMenu" Header="File">
-
-                <MenuFlyoutItem Click="OpenChannel_Click" Text="Enter Channel Id" />
-            </controls:MenuItem>
-        </controls:Menu>
-        <!--<AppBar x:Name="TopAppBar" Closing="AppBar_Closing">
-            <StackPanel Orientation="Horizontal">
-                <Button
-                    x:Name="ChannelButton"
-                    Width="200"
-                    Height="70"
-                    Background="Transparent"
-                    Click="OpenChannel_Click"
-                    Content="Enter channel id" />
-
+        <MenuBar>
+            <MenuBarItem
+                Name="FileMenu"
+                Title="File">
+                <MenuFlyoutItem Click="OpenChannel_Click" Text="Enter Channel ID" />
+                <MenuFlyoutItem Command="{StaticResource LockUnlockWindowCommand}" />
+                <ToggleMenuFlyoutItem IsChecked="True" Command="{Binding Source={StaticResource ShowHidePlatformIconCommand}, Mode=OneTime}" />
+                <MenuFlyoutItem Command="{StaticResource ExitApplicationCommand}" />
+            </MenuBarItem>
+            <MenuBarItem
+                Name="HelpMenu"
+                Title="Help">
+                <MenuFlyoutItem Command="{StaticResource GitHubCommand}" />
+                <MenuFlyoutItem Command="{StaticResource DiscordCommand}" />
+                <!--<MenuFlyoutItem Text="{GetAppVersion()}" />-->
+            </MenuBarItem>
+        </MenuBar>
+        <ScrollViewer x:Name="ConversationScrollViewer"
+            Grid.Row="1"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+            <StackPanel            
+                x:Name="ChatStack"
+                Margin="10"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Bottom" >
+                <ListView   x:Name="ConversationList" >
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,2"  Padding="0,5">
+                                <RichTextBlock  TextAlignment="Left" LineStackingStrategy="BlockLineHeight" LineHeight="18" IsTextSelectionEnabled="True" Margin="0,5,0,5">
+                                    <Paragraph>
+                                        <InlineUIContainer >
+                                            <Image Source="{Binding SvgImage}" Width="25" Height="25" MaxHeight="25" MaxWidth="25" Margin="1,0,3,-7" Visibility="{Binding ImageVisibility}" />
+                                        </InlineUIContainer>
+                                        <InlineUIContainer>
+                                            <Border BorderThickness="1" Margin="-5,0,0,-6" CornerRadius="2"  Background="{Binding TagColor}" Visibility="{Binding TagVisibility}">
+                                                <TextBlock Text="{Binding TagText}" Foreground="White" Padding="4,2,4,2" FontSize="14" />
+                                            </Border>
+                                        </InlineUIContainer>
+                                       
+                                        <Run Text="{Binding Prefix}" Foreground="{Binding PrefixColor}"  />
+                                        <Run Text="{Binding Message}" Foreground="{Binding MessageColor}"  />
+                                    </Paragraph>                                   
+                                </RichTextBlock>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ListView>
+                <ProgressBar x:Name="ResponseProgressBar" Height="5" IsIndeterminate="True" Visibility="Collapsed"/>
             </StackPanel>
-        </AppBar>-->
+        </ScrollViewer>
+        <Grid
+            x:Name="SendMessageGrid"
+            Grid.Row="2"
+            Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition Width="0.4*" />
+            </Grid.ColumnDefinitions>
+            <Button
+                Grid.Column="1"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Background="DodgerBlue"
+                Click="Send_Click"
+                Content="Send"
+                Foreground="White" />
+            <TextBox
+                x:Name="MsgText"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                PlaceholderText="Message" />
+        </Grid>
         <Popup
             x:Name="ChannlePopUp"
             Grid.Row="1"
@@ -46,23 +109,26 @@
                 </TransitionCollection>
             </Popup.ChildTransitions>
             <Grid
+               Margin="0 -100 0 0"
                 Width="200"
-                Height="200"
+                Height="300"                 
                 CornerRadius="5"
                 RowSpacing="0">
-                <StackPanel
-                    Grid.Row="1"
+                <StackPanel                           
+                    Grid.Row="1"  
                     HorizontalAlignment="Center"
                     Orientation="Vertical">
+                    <Image Source="/Assets/Mage100x100.png" Width="100" Height="100" Margin="0,0,0,40"/>
                     <TextBox
                         x:Name="ChannelText"
                         Width="200"
-                        Header="Enter channel id:"
-                        PlaceholderText="Channel id" />
+                        Header="Channel ID"
+                        PlaceholderText="e.g. 65" />
                     <Button
                         Width="200"
                         Height="50"
-                        Background="CadetBlue"
+                        Background="Indigo"
+                        Foreground="White"
                         Click="Channel_Click"
                         Content="Submit" />
                 </StackPanel>

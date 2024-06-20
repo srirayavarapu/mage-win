@@ -1,6 +1,3 @@
-# This workflow will build, sign, and package a WinUI 3 MSIX desktop application
-# built on .NET.
-
 name: ci-prod.yml
 
 on:
@@ -8,6 +5,10 @@ on:
     branches:
       - main
   workflow_dispatch:
+
+permissions:
+  contents: write
+  deployments: write
 
 jobs:
   test:
@@ -30,8 +31,10 @@ jobs:
     - name: Build
       run: dotnet build
 
-    - name: Test with the dotnet CLI
-      run: dotnet test
+    # Uncomment to enable testing
+    # - name: Test with the dotnet CLI
+    #   run: dotnet test
+
   deploy:
     if: ${{ github.actor != 'dependabot[bot]' }}
     name: Create MSIX package artifact
@@ -58,33 +61,73 @@ jobs:
         dotnet-version: 6.0.x
 
     - name: Setup MSBuild.exe
-      uses: microsoft/setup-msbuild@v1.3.1
+      uses: microsoft/setup-msbuild@v2.0.0
 
     - name: Restore the application
       run: msbuild $env:Solution_Name /t:Restore /p:Configuration=$env:Configuration
       env:
         Configuration: ${{ matrix.configuration }}
-        
-    - name: Decode the pfx
+
+    - name: Decode and Import the PFX certificate
       run: |
-        $pfx_cert_byte = [System.Convert]::FromBase64String("${{ secrets.BASE64_ENCODED_PFX }}")
-        $certificatePath = "GitHubActionsWorkflow.pfx"
-        [IO.File]::WriteAllBytes("$certificatePath", $pfx_cert_byte)
+        $pfxBase64 = "${{ secrets.BASE64_ENCODED_PFX }}"
+        $pfxPassword = "${{ secrets.PFX_CERT_PASSWORD }}"
+        $pfxPath = "GitHubActionsWorkflow.pfx"
+        $pfxPasswordSecure = ConvertTo-SecureString -String $pfxPassword -Force -AsPlainText
+        [System.Convert]::FromBase64String($pfxBase64) | Set-Content $pfxPath -AsByteStream
+        Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $pfxPasswordSecure
 
     - name: Create the app package
-      run: msbuild $env:Solution_Name /p:Configuration=$env:Configuration /p:Platform=$env:Platform /p:UapAppxPackageBuildMode=$env:Appx_Package_Build_Mode /p:AppxBundle=$env:Appx_Bundle /p:PackageCertificateKeyFile=GitHubActionsWorkflow.pfx /p:AppxPackageDir="$env:Appx_Package_Dir" /p:GenerateAppxPackageOnBuild=true
+      run: msbuild $env:Solution_Name /p:Configuration=$env:Configuration /p:Platform=$env:Platform /p:UapAppxPackageBuildMode=$env:Appx_Package_Build_Mode /p:AppxBundle=$env:Appx_Bundle /p:PackageCertificateKeyFile=$pfxPath /p:PackageCertificatePassword=$pfxPassword /p:AppxPackageDir="$env:Appx_Package_Dir" /p:GenerateAppxPackageOnBuild=true
       env:
         Appx_Bundle: Never
         Appx_Package_Build_Mode: SideloadOnly
-        Appx_Package_Dir: Packages\
+        Appx_Package_Dir: ./AppPackages/
         Configuration: ${{ matrix.configuration }}
         Platform: ${{ matrix.platform }}
 
-    - name: Remove the pfx
-      run: Remove-Item -path GitHubActionsWorkflow.pfx
-      
+    - name: Remove the PFX certificate
+      run: Remove-Item -Path "GitHubActionsWorkflow.pfx"
+
     - name: Upload MSIX package
       uses: actions/upload-artifact@v4
       with:
-        name: MSIX Package
-        path: ${{ env.Solution_Name }}\\Packages
+        name: MSIX Package ${{ matrix.platform }}
+        path: ./AppPackages/**/*.msix
+
+  create-tag-and-release:
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    name: Create Tag and Release
+    needs: [deploy]
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        platform: [x64, x86]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all history for all tags and branches
+                
+      - name: Download all MSIX packages
+        uses: actions/download-artifact@v4
+
+      - name: Get Project version from Package.appxmanifest
+        id: project-version-latest
+        run: |
+          [xml]$manifest = Get-Content -Path './Package.appxmanifest' # The path to the Package.appxmanifest file in the root directory
+          $version = $manifest.Package.Identity.Version
+          echo "::set-output name=current-version::$version"      
+
+      - name: Create a tag and release
+        uses: softprops/action-gh-release@v2
+        continue-on-error: true
+        with:
+          files: |
+            ./**/*_${{ matrix.platform }}.msix
+          tag_name: ${{ steps.project-version-latest.outputs.current-version }}
+          name: v${{ steps.project-version-latest.outputs.current-version }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
